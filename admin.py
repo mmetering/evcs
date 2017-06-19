@@ -1,3 +1,5 @@
 from django.contrib import admin
+from evcs.models import RFID
 
-# Register your models here.
+
+admin.site.register(RFID)
