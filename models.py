@@ -2,6 +2,20 @@ from django.db import models
 from mmetering.models import Flat
 
 
+class ChargingStation(models.Model):
+    """
+    Models a charging station with it's name and a unique hardware address.
+    """
+    name = models.CharField(max_length=20)
+
+    # TODO: change max_length to actual address length
+    hardware_address = models.CharField(max_length=200, verbose_name="Hardware Adresse")
+
+    class Meta:
+        verbose_name = "Tankstelle"
+        verbose_name_plural = "Tankstellen"
+
+
 class RFID(models.Model):
     """
     Models the RFID chip and creates adds a relation to a certain flat.
@@ -17,26 +31,15 @@ class RFID(models.Model):
         verbose_name_plural = "RFIDs"
 
 
-class ChargingStartValue(models.Model):
+class ChargingValue(models.Model):
     """
-    Saves the meter value at the start of the charging process.
+    Saves the meter value of the charging process.
     """
     rfid = models.ForeignKey(RFID, verbose_name='RFID')
+    charging_station = models.ForeignKey(ChargingStation)
     time = models.DateTimeField()
-    value = models.FloatField()
+    start_value = models.FloatField()
+    end_value = models.FloatField()
 
     def __str__(self):
-        return "EVCS-Startwert für " + self.rfid.flat.name
-
-
-class ChargingEndValue(models.Model):
-    """
-    Saves the meter value at the end of the charging process.
-    """
-    rfid = models.ForeignKey(RFID)
-    start = models.ForeignKey(ChargingStartValue, on_delete=models.CASCADE)
-    time = models.DateTimeField()
-    value = models.FloatField()
-
-    def __str__(self):
-        return "EVCS-Endwert für " + self.rfid.flat.name
+        return "EVCS-Wert für " + self.rfid.flat.name
