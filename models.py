@@ -37,7 +37,8 @@ class ChargingValue(models.Model):
     """
     rfid = models.ForeignKey(RFID, verbose_name='RFID')
     charging_station = models.ForeignKey(ChargingStation)
-    time = models.DateTimeField()
+    start_time = models.DateTimeField()
+    end_time = models.DateTimeField()
     start_value = models.FloatField()
     end_value = models.FloatField()
 
