@@ -38,9 +38,9 @@ class ChargingValue(models.Model):
     rfid = models.ForeignKey(RFID, verbose_name='RFID')
     charging_station = models.ForeignKey(ChargingStation)
     start_time = models.DateTimeField()
-    end_time = models.DateTimeField()
+    end_time = models.DateTimeField(null=True)
     start_value = models.FloatField()
-    end_value = models.FloatField()
+    end_value = models.FloatField(null=True)
 
     def __str__(self):
         return "EVCS-Wert für " + self.rfid.flat.name
