@@ -2,6 +2,7 @@
 
 ### Own ###
 migrations/
+scripter.py
 
 ### Celery ###
 celerybeat-schedule.db
