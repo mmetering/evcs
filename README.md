@@ -32,7 +32,7 @@ Add the following lines to the main ```docker-compose.yml``` file as its own ser
     build: .
     container_name: mmetering_evcs
     privileged: "true"
-    command: python evcs/serial_comm.py
+    command: python evcs/serial.py
     restart: on-failure:5
     volumes:
       - ./mmetering-server
