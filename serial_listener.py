@@ -41,14 +41,22 @@ class Session:
         self.start_time = datetime.today()
         val = ChargingValue.objects.get(pk=self.id)
         val.start_time = self.start_time
-        val.start_value = EastronSDM630(be.choose_port(be.PORTS_LIST), self.meter.addresse).read_total_import()
+        try:
+            start_value = EastronSDM630(be.choose_port(be.PORTS_LIST), self.meter.addresse).read_total_import()
+            val.start_value = start_value
+        except IOError:
+            logger.exception('MMetering EVCS: Could not reach meter with address %d' % self.meter.addresse)
         val.save()
 
     def close(self):
         self.end_time = datetime.today()
         val = ChargingValue.objects.get(pk=self.id)
         val.end_time = self.end_time
-        val.end_value = EastronSDM630(be.choose_port(be.PORTS_LIST), self.meter.addresse).read_total_import()
+        try:
+            end_value = EastronSDM630(be.choose_port(be.PORTS_LIST), self.meter.addresse).read_total_import()
+            val.end_value = end_value
+        except IOError:
+            logger.exception('MMetering EVCS: Could not reach meter with address %d' % self.meter.addresse)
         val.save()
 
         return self.tag
@@ -176,7 +184,14 @@ class EVCS:
     out_queue = Queue()
     sessions = dict()
 
-    def __init__(self, port):
+    def __init__(self, port, **kwargs):
+        if kwargs.get('logfile'):
+            logging.basicConfig(
+                filename=kwargs.get('logfile'),
+                level=kwargs.get('loglevel'),
+                format=kwargs.get('logformat')
+            )
+
         self.listener = SerialListener(port, EVCS.in_queue, EVCS.out_queue)
         self.handler = SerialHandler(EVCS.in_queue, EVCS.out_queue, EVCS.sessions)
 
