@@ -10,8 +10,8 @@ class ChargingValue(models.Model):
     charging_station = models.ForeignKey(Flat)
     start_time = models.DateTimeField(null=True)
     end_time = models.DateTimeField(null=True)
-    start_value = models.FloatField(null=True)
-    end_value = models.FloatField(null=True)
+    start_value = models.FloatField(null=True, blank=True)
+    end_value = models.FloatField(null=True, blank=True)
 
     def __str__(self):
-        return "EVCS-Wert für Lader %d" % self.charging_station
+        return "EVCS-Wert für Lader %s" % self.charging_station.name
