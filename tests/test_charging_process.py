@@ -1,6 +1,6 @@
 import unittest
 import os, pty
-from evcs.serial import EVCS
+from evcs.serial_listener import EVCS
 import logging
 from time import sleep
 
