@@ -1,6 +1,5 @@
 import serial
 import re
-from django.core.exceptions import ObjectDoesNotExist
 from datetime import datetime
 from evcs.models import ChargingValue
 from mmetering.models import Flat, Meter
@@ -11,7 +10,7 @@ import threading
 from queue import Queue
 
 logger = logging.getLogger(__name__)
-PORT = '/dev/ttyUSB1'
+
 _FINISH = False
 
 
@@ -177,9 +176,7 @@ class EVCS:
     out_queue = Queue()
     sessions = dict()
 
-    def __init__(self, port, logfile='serial_comm.log', loglevel=logging.DEBUG,
-                 logformat='%(asctime)s - %(name)s - %(threadName)s - %(levelname)s - %(message)s'):
-        logging.basicConfig(filename=logfile, level=loglevel, format=logformat)
+    def __init__(self, port):
         self.listener = SerialListener(port, EVCS.in_queue, EVCS.out_queue)
         self.handler = SerialHandler(EVCS.in_queue, EVCS.out_queue, EVCS.sessions)
 
@@ -194,8 +191,4 @@ class EVCS:
         self.listener.join()
 
 
-try:
-    evcs = EVCS(PORT)
-    evcs.start()
-except serial.SerialException as e:
-    logger.exception('Could not open port %s in MMetering EVCS' % PORT)
+

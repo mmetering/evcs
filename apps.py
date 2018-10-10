@@ -1,9 +1,9 @@
 from django.apps import AppConfig
+import logging
+
+logger = logging.getLogger(__name__)
 
 
 class EvcsConfig(AppConfig):
     name = 'evcs'
 
-    def ready(self):
-        print()
-        # TODO: load ports dynamically from config file and start listener
