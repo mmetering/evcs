@@ -22,7 +22,7 @@ class Session:
 
     def __init__(self, charging_station, tag):
         self.charging_station = Flat.objects.get(name=charging_station)
-        self.meter = Meter.objects.get(flat=self.charging_station)
+        self.meter = Meter.objects.get(flat=self.charging_station, active=True)
 
         self.tag = tag
         self.start_time = None
@@ -152,10 +152,11 @@ class SerialHandler(threading.Thread):
                         self.stop_loading(tag_id)
 
     def start_loading(self, tag_id):
+        # TODO: Replace static charging station name
         charging_station = 'Lader 1'
         logger.info('Ready for charging on station %s with tag %s' % (charging_station, tag_id))
+        # TODO: Send OK message only if session could have been initiated
         self.serial_out.put_nowait('OK_Lader1!')
-        # TODO: Replace static charging station name
         try:
             session = Session('Lader 1', tag_id)
         except Meter.DoesNotExist or Flat.DoesNotExist:
