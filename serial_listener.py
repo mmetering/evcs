@@ -31,7 +31,8 @@ class Session:
         model = ChargingValue(
             rfid=self.tag,
             charging_station=self.charging_station.pk
-        ).save()
+        )
+        model.save()
         self.id = model.pk
 
     def is_open(self):
@@ -42,24 +43,34 @@ class Session:
         val = ChargingValue.objects.get(pk=self.id)
         val.start_time = self.start_time
         try:
+            # TODO: Save L1, L2, L3 here according to issue #1.
             start_value = EastronSDM630(be.choose_port(be.PORTS_LIST), self.meter.addresse).read_total_import()
             val.start_value = start_value
-        except IOError:
+
+            # Adding start_time only if meter value could have been read.
+            val.save()
+
+            return True
+        except (IOError, ValueError) as e:
             logger.exception('MMetering EVCS: Could not reach meter with address %d' % self.meter.addresse)
-        val.save()
+            return False
 
     def close(self):
         self.end_time = datetime.today()
         val = ChargingValue.objects.get(pk=self.id)
         val.end_time = self.end_time
         try:
+            # TODO: Save L1, L2, L3 here according to issue #1.
             end_value = EastronSDM630(be.choose_port(be.PORTS_LIST), self.meter.addresse).read_total_import()
             val.end_value = end_value
-        except IOError:
-            logger.exception('MMetering EVCS: Could not reach meter with address %d' % self.meter.addresse)
-        val.save()
 
-        return self.tag
+            # Adding end_time only if meter value could have been read.
+            val.save()
+
+            return True
+        except (IOError, ValueError) as e:
+            logger.exception('MMetering EVCS: Could not reach meter with address %d' % self.meter.addresse)
+            return False
 
     def get_charging_station(self):
         return self.charging_station.name
@@ -155,12 +166,14 @@ class SerialHandler(threading.Thread):
         # TODO: Replace static charging station name
         charging_station = 'Lader 1'
         logger.info('Ready for charging on station %s with tag %s' % (charging_station, tag_id))
-        # TODO: Send OK message only if session could have been initiated
-        self.serial_out.put_nowait('OK_Lader1!')
         try:
             session = Session('Lader 1', tag_id)
+            self.serial_out.put_nowait('OK_Lader1!')
         except Meter.DoesNotExist or Flat.DoesNotExist:
             logger.exception('There is no registered meter for %s.' % charging_station)
+
+            # TODO: Implement error handling on the hardware side
+            self.serial_out.put_nowait('ERROR_Lader1!')
             return
 
         self.sessions[tag_id] = session
@@ -168,16 +181,22 @@ class SerialHandler(threading.Thread):
         check_line = self.serial_in.get(block=True, timeout=3)
         check_match = re.match(self.regexp['check'], check_line)
         if check_match:
-            session.open()
-            logger.info('Charging has been started with tag %s' % tag_id)
+            if session.open():
+                logger.info('Charging has been started with tag %s' % tag_id)
+            else:
+                logger.error('Starting the charging process failed on opening the session with tag %s' % tag_id)
 
     def stop_loading(self, tag_id):
         try:
             session = self.sessions[tag_id]
-            del self.sessions[session.close()]
+
+            if session.close():
+                logger.info('Charging has been stopped with tag %s' % tag_id)
+                del self.sessions[session.get_tag()]
+            else:
+                logger.error('Stopping the charging process failed on closing the session with tag %s' % tag_id)
         except KeyError:
             logger.error('Could not found session initiated with tag %s' % tag_id)
-        logger.info('Charging has been stopped with tag %s' % tag_id)
 
 
 class EVCS:
