@@ -39,9 +39,9 @@ class Session:
         return self.start_time is not None and self.end_time is None
 
     def open(self):
-        self.start_time = datetime.today()
+        start_time = datetime.today()
         val = ChargingValue.objects.get(pk=self.id)
-        val.start_time = self.start_time
+        val.start_time = start_time
         try:
             values = self.query_device()
             val.start_value_l1 = values[0]
@@ -51,6 +51,7 @@ class Session:
 
             # Adding start_time only if meter value could have been read.
             val.save()
+            self.start_time = start_time
 
             return True
         except (IOError, ValueError) as e:
@@ -58,9 +59,9 @@ class Session:
             return False
 
     def close(self):
-        self.end_time = datetime.today()
+        end_time = datetime.today()
         val = ChargingValue.objects.get(pk=self.id)
-        val.end_time = self.end_time
+        val.end_time = end_time
         try:
             values = self.query_device()
             val.end_value_l1 = values[0]
@@ -70,6 +71,7 @@ class Session:
 
             # Adding end_time only if meter value could have been read.
             val.save()
+            self.end_time = end_time
 
             return True
         except (IOError, ValueError) as e:
