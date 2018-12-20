@@ -1,7 +1,6 @@
 # Created by https://www.gitignore.io/api/python,django,pycharm,virtualenv,vim
 
 ### Own ###
-migrations/
 scripter.py
 
 ### Celery ###

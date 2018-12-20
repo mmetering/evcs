@@ -4,7 +4,7 @@ from datetime import datetime
 from evcs.models import ChargingValue
 from mmetering.models import Flat, Meter
 from backend.eastronSDM630 import EastronSDM630
-import backend.serial as be
+from mmetering_server.settings.defaults import MODBUS_PORT
 import logging
 import threading
 from queue import Queue
@@ -22,7 +22,7 @@ class Session:
 
     def __init__(self, charging_station, tag):
         self.charging_station = Flat.objects.get(name=charging_station)
-        self.meter = Meter.objects.get(flat=self.charging_station)
+        self.meter = Meter.objects.get(flat=self.charging_station, active=True)
 
         self.tag = tag
         self.start_time = None
@@ -31,35 +31,62 @@ class Session:
         model = ChargingValue(
             rfid=self.tag,
             charging_station=self.charging_station.pk
-        ).save()
+        )
+        model.save()
         self.id = model.pk
 
     def is_open(self):
         return self.start_time is not None and self.end_time is None
 
     def open(self):
-        self.start_time = datetime.today()
+        start_time = datetime.today()
         val = ChargingValue.objects.get(pk=self.id)
-        val.start_time = self.start_time
+        val.start_time = start_time
         try:
-            start_value = EastronSDM630(be.choose_port(be.PORTS_LIST), self.meter.addresse).read_total_import()
-            val.start_value = start_value
-        except IOError:
+            values = self.query_device()
+            val.start_value_l1 = values[0]
+            val.start_value_l2 = values[1]
+            val.start_value_l3 = values[2]
+            val.start_value = values[3]
+
+            # Adding start_time only if meter value could have been read.
+            val.save()
+            self.start_time = start_time
+
+            return True
+        except (IOError, ValueError) as e:
             logger.exception('MMetering EVCS: Could not reach meter with address %d' % self.meter.addresse)
-        val.save()
+            return False
 
     def close(self):
-        self.end_time = datetime.today()
+        end_time = datetime.today()
         val = ChargingValue.objects.get(pk=self.id)
-        val.end_time = self.end_time
+        val.end_time = end_time
         try:
-            end_value = EastronSDM630(be.choose_port(be.PORTS_LIST), self.meter.addresse).read_total_import()
-            val.end_value = end_value
-        except IOError:
-            logger.exception('MMetering EVCS: Could not reach meter with address %d' % self.meter.addresse)
-        val.save()
+            values = self.query_device()
+            val.end_value_l1 = values[0]
+            val.end_value_l2 = values[1]
+            val.end_value_l3 = values[2]
+            val.end_value = values[3]
 
-        return self.tag
+            # Adding end_time only if meter value could have been read.
+            val.save()
+            self.end_time = end_time
+
+            return True
+        except (IOError, ValueError) as e:
+            logger.exception('MMetering EVCS: Could not reach meter with address %d' % self.meter.addresse)
+            return False
+
+    def query_device(self):
+        meter = EastronSDM630(MODBUS_PORT, self.meter.addresse)
+
+        value_total = meter.read_total_import()
+        value_l1 = meter.read_import_L1()
+        value_l2 = meter.read_import_L2()
+        value_l3 = meter.read_import_L3()
+
+        return value_l1, value_l2, value_l3, value_total
 
     def get_charging_station(self):
         return self.charging_station.name
@@ -152,14 +179,18 @@ class SerialHandler(threading.Thread):
                         self.stop_loading(tag_id)
 
     def start_loading(self, tag_id):
+        # TODO: Replace static charging station name
         charging_station = 'Lader 1'
         logger.info('Ready for charging on station %s with tag %s' % (charging_station, tag_id))
-        self.serial_out.put_nowait('OK_Lader1!')
-        # TODO: Replace static charging station name
         try:
             session = Session('Lader 1', tag_id)
+            self.serial_out.put_nowait('OK_Lader1!')
         except Meter.DoesNotExist or Flat.DoesNotExist:
             logger.exception('There is no registered meter for %s.' % charging_station)
+
+            # TODO: Implement error handling on the hardware side
+            # Meter or Device with this name (charging_station) is not registered in the system.
+            self.serial_out.put_nowait('ERROR10_Lader1!')
             return
 
         self.sessions[tag_id] = session
@@ -167,16 +198,25 @@ class SerialHandler(threading.Thread):
         check_line = self.serial_in.get(block=True, timeout=3)
         check_match = re.match(self.regexp['check'], check_line)
         if check_match:
-            session.open()
-            logger.info('Charging has been started with tag %s' % tag_id)
+            if session.open():
+                logger.info('Charging has been started with tag %s' % tag_id)
+            else:
+                logger.error('Starting the charging process failed on opening the session with tag %s' % tag_id)
+                self.serial_out.put_nowait('ERROR20_Lader1!')
 
     def stop_loading(self, tag_id):
         try:
             session = self.sessions[tag_id]
-            del self.sessions[session.close()]
+
+            if session.close():
+                logger.info('Charging has been stopped with tag %s' % tag_id)
+                del self.sessions[session.get_tag()]
+            else:
+                logger.error('Stopping the charging process failed on closing the session with tag %s' % tag_id)
+                self.serial_out.put_nowait('ERROR21_Lader1!')
         except KeyError:
             logger.error('Could not found session initiated with tag %s' % tag_id)
-        logger.info('Charging has been stopped with tag %s' % tag_id)
+            self.serial_out.put_nowait('ERROR30_Lader1!')
 
 
 class EVCS:
